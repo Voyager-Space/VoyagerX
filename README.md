@@ -42,7 +42,7 @@ NRF24L01+ powered at 3.3V with integrated 100 µF decoupling capacitor for EMI s
 
 ---
 
-## 💻 Mission Control (Software)
+## Mission Control (Software)
 
 * **Backend:** Python Flask server — manages concurrent serial I/O and binary→JSON packet translation.
 * **Visualizer:** CesiumJS — renders real-time orientation (quaternions) and geospatial trajectory.
@@ -51,7 +51,7 @@ NRF24L01+ powered at 3.3V with integrated 100 µF decoupling capacitor for EMI s
 
 ---
 
-## ⚡ Key Features
+## Key Features
 
 | Feature                  | Description                                                                                        |
 | ------------------------ | -------------------------------------------------------------------------------------------------- |
@@ -173,7 +173,7 @@ Repeat for `firmware/GroundStation/VoyagerX_GS_Pro.ino` on the Receiver ESP32.
 
 ---
 
-## 🎮 Operational Guide
+## Operational Guide
 
 ### Phase 1 — Pre-Launch
 
@@ -214,7 +214,7 @@ This launches an interactive 3D plot showing flight path, apogee, and velocity p
 
 ---
 
-## ⚠️ Safety Protocols
+## Safety Protocols
 
 * **Radio compliance:** System operates in the 2.4 GHz ISM band. Verify and follow local RF regulations and power limits.
 * **LiPo handling:** Use a fire-safe charging bag, never short battery terminals, and store/dispose batteries safely.
