@@ -16,7 +16,6 @@ The architecture is bifurcated into a high-performance embedded flight computer 
 * Local-first architecture with offline post-flight analysis
 
 ![VoyagerX Digital Twin](Twin.png)
-
 ---
 
 ## Avionics (Hardware)
