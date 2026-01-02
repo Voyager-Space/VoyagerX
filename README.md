@@ -15,6 +15,8 @@ The architecture is bifurcated into a high-performance embedded flight computer 
 * High-frequency telemetry for transient event capture
 * Local-first architecture with offline post-flight analysis
 
+![VoyagerX Digital Twin](Twin.png)
+
 ---
 
 ## Avionics (Hardware)
@@ -201,6 +203,9 @@ http://localhost:5000
 
 * `CONNECT LIVE` — actual mission with hardware.
 * `START SIMULATION` — use internal 6-DOF simulator for UI/logic test.
+
+![VoyagerX Analyzer](Analyzer.png)
+
 
 ### Phase 3 — Post-Flight
 
