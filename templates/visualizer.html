@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>VOYAGER X /// MISSION CONTROL</title>
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'Rajdhani', sans-serif; background: #000; }
+        
+        /* TOP BAR */
+        #top-bar { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 60px; 
+            background: rgba(5, 8, 20, 0.95); border-bottom: 2px solid #00f3ff; 
+            z-index: 10; display: flex; align-items: center; justify-content: space-between; 
+            padding: 0 30px; box-sizing: border-box; 
+        }
+        .clock { font-size: 32px; color: white; font-weight: bold; letter-spacing: 3px; text-shadow: 0 0 15px #00f3ff;}
+        .clock-label { font-size: 11px; color: #4da6ff; letter-spacing: 5px; display: block; margin-top: -5px; font-weight: bold;}
+
+        /* SIDEBAR */
+        #sidebar { 
+            position: absolute; top: 60px; left: 0; width: 340px; height: calc(100vh - 60px); 
+            background: rgba(4, 6, 15, 0.9); border-right: 1px solid #333; 
+            z-index: 10; padding: 20px; color: white; box-sizing: border-box; 
+            backdrop-filter: blur(10px); overflow-y: auto;
+        }
+        
+        .metric-box { 
+            background: linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(0,0,0,0) 100%); 
+            padding: 15px; margin-bottom: 15px; 
+            border-left: 4px solid #00f3ff; border-radius: 0 8px 8px 0; 
+        }
+        .metric-label { font-size: 13px; color: #8899ac; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 5px;}
+        .gps-val { font-family: 'Courier New'; font-size: 18px; color: #00f3ff; font-weight: bold; }
+        
+        .att-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; text-align: center; }
+        .att-item { background: rgba(0,0,0,0.3); padding: 5px; border-radius: 5px; }
+        .att-item .val { font-size: 22px; font-weight: bold; color: white; }
+        
+        /* SIM CONTROLS */
+        #sim-controls { display: none; margin-top: 20px; border-top: 1px solid #444; padding-top: 15px; }
+        .slider-head { font-size: 12px; color: #4da6ff; display: flex; justify-content: space-between; margin-bottom: 2px; }
+        input[type=range] { width: 100%; accent-color: #00f3ff; cursor: pointer; height: 5px; }
+
+        /* CAMERA BUTTONS */
+        #cam-controls { 
+            position: absolute; bottom: 30px; right: 30px; z-index: 10; 
+            display: flex; gap: 15px; flex-direction: column;
+        }
+        .cam-btn { 
+            background: rgba(0, 10, 20, 0.8); border: 1px solid #00f3ff; color: #00f3ff; 
+            padding: 15px 25px; font-family: 'Rajdhani'; font-weight: bold; cursor: pointer; 
+            transition: 0.2s; text-transform: uppercase; letter-spacing: 2px; text-align: right;
+            border-radius: 5px; font-size: 16px;
+        }
+        .cam-btn:hover { background: #00f3ff; color: black; box-shadow: 0 0 20px #00f3ff; }
+        .cam-btn.active { background: #00f3ff; color: black; box-shadow: 0 0 30px #00f3ff; border: 2px solid white; }
+
+        #locate-btn {
+            border-color: #ffaa00; color: #ffaa00;
+        }
+        #locate-btn:hover { background: #ffaa00; color: black; box-shadow: 0 0 20px #ffaa00; }
+
+    </style>
+</head>
+<body>
+    <div id="top-bar">
+        <span style="color:#00f3ff; font-weight:bold; font-size: 24px;">VOYAGER X</span>
+        <div class="clock-container" style="text-align: center;">
+            <span class="clock" id="clock">00:00:00</span>
+            <span class="clock-label">MISSION TIME</span>
+        </div>
+        <div style="width: 100px; text-align:right; font-size:12px; color:#00f3ff;">LIVE LINK</div>
+    </div>
+
+    <div id="sidebar">
+
+        <div class="metric-box" style="border-left-color: #888;">
+            <div class="metric-label">SYSTEM STATUS</div>
+            <div id="status" style="font-size: 20px; color: #aaa; font-weight: bold;">DISCONNECTED</div>
+        </div>
+
+        <div class="metric-box">
+            <div class="metric-label">GNSS COORDINATES</div>
+            <div class="gps-val">LAT: <span id="lat">0.000000</span></div>
+            <div class="gps-val">LON: <span id="lng">0.000000</span></div>
+            <div class="gps-val" style="font-size:14px; color:#aaa; margin-top:5px;">ALT: <span id="height" style="color:white; font-size:20px;">0.0</span> m</div>
+        </div>
+
+        <div class="metric-box" style="border-left-color: #ff0055;">
+            <div class="metric-label">ATTITUDE</div>
+            <div class="att-grid">
+                <div class="att-item"><div class="val" id="pitch">0°</div><div style="font-size:10px; color:#aaa;">PITCH</div></div>
+                <div class="att-item"><div class="val" id="roll">0°</div><div style="font-size:10px; color:#aaa;">ROLL</div></div>
+                <div class="att-item"><div class="val" id="yaw">0°</div><div style="font-size:10px; color:#aaa;">YAW</div></div>
+            </div>
+        </div>
+
+        <div id="sim-controls">
+            <h4 style="color:#00f3ff; margin:0 0 10px 0;">PHYSICS OVERRIDE</h4>
+            
+            <div class="slider-head"><span>THROTTLE (AZ)</span> <span id="val-az">0.0</span></div>
+            <input type="range" id="s-az" min="-2" max="20" step="0.1" value="0">
+            
+            <div class="slider-head"><span>LATERAL AX</span> <span id="val-ax">0.0</span></div>
+            <input type="range" id="s-ax" min="-5" max="5" step="0.1" value="0">
+            
+            <div class="slider-head"><span>LATERAL AY</span> <span id="val-ay">0.0</span></div>
+            <input type="range" id="s-ay" min="-5" max="5" step="0.1" value="0">
+            
+            <hr style="border-top:1px solid #333; margin:10px 0;">
+
+            <div class="slider-head"><span>PITCH</span> <span id="val-p">0</span></div>
+            <input type="range" id="s-pitch" min="-90" max="90" value="0">
+            
+            <div class="slider-head"><span>ROLL</span> <span id="val-r">0</span></div>
+            <input type="range" id="s-roll" min="-180" max="180" value="0">
+            
+            <div class="slider-head"><span>YAW</span> <span id="val-y">0</span></div>
+            <input type="range" id="s-yaw" min="0" max="360" value="0">
+        </div>
+    </div>
+
+    <div id="cam-controls">
+        <button class="cam-btn" onclick="setCamera('FREE')" id="btn-free">FREE CAM</button>
+        <button class="cam-btn active" onclick="setCamera('TRACK')" id="btn-track">CHASE CAM (20m)</button>
+        <button class="cam-btn" onclick="flyToRocket()" id="locate-btn">📍 LOCATE</button>
+    </div>
+
+    <div id="cesiumContainer" style="width:100%; height:100vh;"></div>
+
+    <script>
+  
+        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI4NDczYmM4Ny1iNzNmLTQxZmYtYjdmNC0zYzU1NWY1YzM2YzkiLCJpZCI6MzY5NTEzLCJpYXQiOjE3NjU2OTMxODN9.teDsroeU2IUvC89PdlTUhXj_uViqN0TRehJl5S5umPo';
+
+        
+        const BASE_ALTITUDE = 860; 
+
+
+        const viewer = new Cesium.Viewer('cesiumContainer', {
+            terrainProvider: Cesium.createWorldTerrain(),
+            baseLayerPicker: false, timeline: false, animation: false,
+            selectionIndicator: false, infoBox: false, sceneMode: Cesium.SceneMode.SCENE3D,
+            shadows: true
+        });
+        viewer.scene.globe.depthTestAgainstTerrain = true;
+
+        const positionProperty = new Cesium.SampledPositionProperty();
+        const rocket = viewer.entities.add({
+            name: "VoyagerX",
+            position: positionProperty,
+            
+            point: {
+                pixelSize: 15,
+                color: Cesium.Color.fromCssColorString('#00ff00'), 
+                outlineColor: Cesium.Color.WHITE,
+                outlineWidth: 2,
+                disableDepthTestDistance: Number.POSITIVE_INFINITY 
+            },
+            
+            path: { 
+                resolution: 1, 
+                material: new Cesium.PolylineGlowMaterialProperty({ glowPower: 0.5, color: Cesium.Color.CYAN }), 
+                width: 6, 
+                leadTime: 0, 
+                trailTime: 3600 
+            }
+        });
+
+       
+        let cameraMode = 'TRACK';
+        let currentPos = Cesium.Cartesian3.fromDegrees(77.5946, 12.9716, 1000); 
+        
+        function setCamera(mode) {
+            cameraMode = mode;
+            document.querySelectorAll('.cam-btn').forEach(b => b.className = 'cam-btn');
+            if(mode !== 'LOCATE') document.getElementById('btn-' + mode.toLowerCase()).className = 'cam-btn active';
+            
+            if(mode === 'FREE') {
+                viewer.trackedEntity = undefined; 
+            }
+        }
+
+        function flyToRocket() {
+            viewer.camera.flyTo({
+                destination: currentPos,
+                duration: 1.0
+            });
+        }
+
+       
+        const sliders = ['s-ax', 's-ay', 's-az', 's-pitch', 's-roll', 's-yaw'];
+        
+        function sendSim() {
+            const data = {
+                ax: parseFloat(document.getElementById('s-ax').value),
+                ay: parseFloat(document.getElementById('s-ay').value),
+                az: parseFloat(document.getElementById('s-az').value),
+                pitch: parseFloat(document.getElementById('s-pitch').value),
+                roll: parseFloat(document.getElementById('s-roll').value),
+                yaw: parseFloat(document.getElementById('s-yaw').value)
+            };
+            
+            document.getElementById('val-ax').innerText = data.ax;
+            document.getElementById('val-ay').innerText = data.ay;
+            document.getElementById('val-az').innerText = data.az;
+            document.getElementById('val-p').innerText = data.pitch;
+            document.getElementById('val-r').innerText = data.roll;
+            document.getElementById('val-y').innerText = data.yaw;
+
+            fetch('/api/control', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+        }
+
+        sliders.forEach(id => {
+            document.getElementById(id).addEventListener('input', sendSim);
+        });
+
+       
+        setInterval(async () => {
+            try {
+                const res = await fetch('/api/data');
+                const data = await res.json();
+
+                const now = new Date();
+                document.getElementById('clock').innerText = now.toLocaleTimeString('en-GB');
+
+                
+                const absAltitude = data.height + BASE_ALTITUDE;
+
+                
+                document.getElementById('height').innerText = data.height.toFixed(1);
+                document.getElementById('lat').innerText = data.lat.toFixed(6);
+                document.getElementById('lng').innerText = data.long.toFixed(6);
+                document.getElementById('pitch').innerText = data.pitch.toFixed(0) + "°";
+                document.getElementById('roll').innerText = data.roll.toFixed(0) + "°";
+                document.getElementById('yaw').innerText = data.yaw.toFixed(0) + "°";
+                
+                
+                const stat = document.getElementById('status');
+                const simPanel = document.getElementById('sim-controls');
+                if(data.status.includes("SIM")) { 
+                    stat.innerText = "SIMULATION"; stat.style.color = "#ffaa00"; 
+                    simPanel.style.display = 'block';
+                } else if(data.status.includes("LIVE")) { 
+                    stat.innerText = "LIVE DATA"; stat.style.color = "#00ff00"; 
+                    simPanel.style.display = 'none';
+                } else { 
+                    stat.innerText = "DISCONNECTED"; stat.style.color = "#ff0000"; 
+                    simPanel.style.display = 'none';
+                }
+
+               
+                const time = Cesium.JulianDate.now();
+                currentPos = Cesium.Cartesian3.fromDegrees(data.long, data.lat, absAltitude);
+                positionProperty.addSample(time, currentPos);
+
+                
+                if (cameraMode === 'TRACK') {
+                    viewer.trackedEntity = undefined; 
+                    
+                    
+                    
+                    const heading = viewer.camera.heading;
+                    const pitch = viewer.camera.pitch;
+                    const range = 30.0; 
+
+                    viewer.camera.lookAt(
+                        currentPos,
+                        new Cesium.HeadingPitchRange(heading, pitch, range)
+                    );
+                }
+
+            } catch (e) {}
+        }, 50);
+
+        viewer.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(77.5946, 12.9716, 2000) });
+
+    </script>
+</body>
+</html>

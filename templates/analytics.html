@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>VOYAGER X /// ANALYTICS</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        body { 
+            background: #02040a; color: white; font-family: 'Rajdhani', sans-serif;
+            margin: 0; padding: 0; height: 100vh; width: 100vw; overflow: hidden;
+            display: flex; flex-direction: column;
+        }
+
+        /* GRID LAYOUT */
+        .grid-row { display: flex; height: 46%; width: 100%; gap: 12px; padding: 10px; box-sizing: border-box; }
+        
+        .panel { 
+            background: rgba(14, 18, 36, 0.95); 
+            border: 1px solid #1c2b45; 
+            border-radius: 6px; 
+            flex: 1; display: flex; flex-direction: column; 
+            overflow: hidden; position: relative;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.6);
+        }
+        
+        .header { 
+            background: rgba(21, 27, 51, 1); color: #4da6ff; padding: 8px 15px; 
+            font-size: 14px; letter-spacing: 2px; border-bottom: 1px solid #1c2b45; 
+            font-weight: bold; text-transform: uppercase; display: flex; justify-content: space-between;
+        }
+
+        .chart-wrapper { flex: 1; position: relative; width: 100%; min-height: 0; padding: 5px;}
+        
+        .status-pill {
+            font-size: 10px; padding: 2px 8px; border-radius: 4px; background: #333; color: #aaa;
+        }
+        .calibrating { background: #ffaa00; color: black; animation: pulse 1s infinite; }
+        .active { background: #00ff99; color: black; }
+
+        @keyframes pulse { 0% {opacity: 1;} 50% {opacity: 0.5;} 100% {opacity: 1;} }
+
+        /* TOOLBAR */
+        .toolbar { 
+            height: 8%; background: #0b1026; border-top: 1px solid #1c2b45; 
+            display: flex; align-items: center; justify-content: center; gap: 20px;
+        }
+
+        .tool-btn {
+            background: transparent; border: 1px solid #4da6ff; color: #4da6ff;
+            padding: 8px 30px; font-family: 'Rajdhani'; font-weight: bold; font-size: 16px;
+            cursor: pointer; transition: 0.2s; border-radius: 30px; letter-spacing: 1px;
+        }
+        .tool-btn:hover { background: #4da6ff; color: black; box-shadow: 0 0 20px rgba(77, 166, 255, 0.4); }
+        .tool-btn.danger { border-color: #ff3366; color: #ff3366; }
+        .tool-btn.danger:hover { background: #ff3366; color: white; box-shadow: 0 0 20px #ff3366; }
+
+    </style>
+</head>
+<body>
+
+    <!-- ROW 1 -->
+    <div class="grid-row">
+        <!-- Panel 1: Attitude -->
+        <div class="panel">
+            <div class="header">ATTITUDE DYNAMICS</div>
+            <div class="chart-wrapper"><canvas id="attChart"></canvas></div>
+        </div>
+        <!-- Panel 2: Altitude -->
+        <div class="panel">
+            <div class="header">FLIGHT PROFILE (ALTITUDE)</div>
+            <div class="chart-wrapper"><canvas id="altChart"></canvas></div>
+        </div>
+        <!-- Panel 3: Velocity (Calculated via Integration) -->
+        <div class="panel">
+            <div class="header">
+                INERTIAL VELOCITY (Vx/Vy/Vz)
+                <span id="imu-status" class="status-pill calibrating">CALIBRATING</span>
+            </div>
+            <div class="chart-wrapper"><canvas id="velChart"></canvas></div>
+        </div>
+    </div>
+
+    <!-- ROW 2 -->
+    <div class="grid-row">
+        <!-- Panel 4: Acceleration -->
+        <div class="panel">
+            <div class="header">ACCELERATION (G-FORCE)</div>
+            <div class="chart-wrapper"><canvas id="accChart"></canvas></div>
+        </div>
+        <!-- Panel 5: 3D Trajectory -->
+        <div class="panel" style="flex: 2;"> 
+            <div class="header">3D TRAJECTORY RECONSTRUCTION</div>
+            <div id="plotly3d" style="width:100%; height:100%;"></div>
+        </div>
+    </div>
+
+    <!-- TOOLBAR -->
+    <div class="toolbar">
+        <button class="tool-btn" onclick="window.location.href='/api/export_csv'">DOWNLOAD FLIGHT LOG (CSV)</button>
+        <button class="tool-btn danger" onclick="resetPhysics()">RESET PHYSICS ENGINE</button>
+        <div style="color: #444; font-size: 12px; margin-left: 20px;">VOYAGER X ANALYTICS SUITE</div>
+    </div>
+
+    <script>
+        // --- CONFIGURATION ---
+        Chart.defaults.color = '#556677';
+        Chart.defaults.font.family = 'Rajdhani';
+        Chart.defaults.borderColor = '#1c2b45';
+        
+        const commonOpts = {
+            responsive: true, maintainAspectRatio: false, animation: false,
+            scales: { x: { display: false }, y: { grid: { color: '#1c2b45', lineWidth: 0.5 } } },
+            elements: { point: { radius: 0 }, line: { borderWidth: 2, tension: 0.4 } }, // High tension for smooth curves
+            plugins: { legend: { labels: { font: { size: 11, weight: 'bold' }, padding: 10 } } }
+        };
+
+        // --- CHARTS INITIALIZATION ---
+        const attChart = new Chart(document.getElementById('attChart'), {
+            type: 'line', data: { labels: [], datasets: [
+                { label: 'Pitch', borderColor: '#ffcc00', data: [] },
+                { label: 'Roll', borderColor: '#00ff99', data: [] },
+                { label: 'Yaw', borderColor: '#cc00ff', data: [] }
+            ]}, options: { ...commonOpts, scales: { x: {display:false}, y: { min: -180, max: 180 } } }
+        });
+
+        const altChart = new Chart(document.getElementById('altChart'), {
+            type: 'line', data: { labels: [], datasets: [{ label: 'Altitude (m)', borderColor: '#00f3ff', backgroundColor: 'rgba(0, 243, 255, 0.05)', fill: true, data: [] }] },
+            options: commonOpts
+        });
+
+        // VELOCITY CHART (3 AXIS)
+        const velChart = new Chart(document.getElementById('velChart'), {
+            type: 'line', data: { labels: [], datasets: [
+                { label: 'Vz (Vert)', borderColor: '#ff3366', borderWidth: 2, data: [] }, // Red
+                { label: 'Vy (Lat)', borderColor: '#ffaa00', borderWidth: 1.5, data: [] }, // Orange
+                { label: 'Vx (Lon)', borderColor: '#9933ff', borderWidth: 1.5, data: [] }  // Purple
+            ]}, options: commonOpts
+        });
+
+        const accChart = new Chart(document.getElementById('accChart'), {
+            type: 'line', data: { labels: [], datasets: [
+                { label: 'Az (Vert)', borderColor: '#ff3366', borderWidth: 2, data: [] }, 
+                { label: 'Ay (Lat)', borderColor: '#ffaa00', borderWidth: 1.5, data: [] },
+                { label: 'Ax (Lon)', borderColor: '#9933ff', borderWidth: 1.5, data: [] }
+            ]}, options: commonOpts
+        });
+
+        // --- PLOTLY 3D ---
+        const layout3d = {
+            paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+            margin: {l:0, r:0, b:0, t:0}, uirevision: 'true',
+            scene: {
+                xaxis: {title: 'LAT', color: '#4da6ff', showgrid: true, gridcolor: '#1c2b45', backgroundcolor: '#0e1224'},
+                yaxis: {title: 'LNG', color: '#4da6ff', showgrid: true, gridcolor: '#1c2b45', backgroundcolor: '#0e1224'},
+                zaxis: {title: 'ALT', color: '#4da6ff', showgrid: true, gridcolor: '#1c2b45', backgroundcolor: '#0e1224'},
+                aspectmode: 'cube'
+            }
+        };
+        Plotly.newPlot('plotly3d', [{ type: 'scatter3d', mode: 'lines', x: [], y: [], z: [], line: { width: 4, color: '#00f3ff' }, marker: {size:0} }], layout3d);
+
+        // --- PHYSICS ENGINE VARIABLES ---
+        let velocity = { x: 0, y: 0, z: 0 };
+        let lastTime = Date.now();
+        
+        // Calibration State
+        let calibrationCount = 0;
+        const CALIBRATION_SAMPLES = 20;
+        let bias = { ax: 0, ay: 0, az: 0 };
+        let isCalibrated = false;
+
+        // Integration State (Trapezoidal)
+        let lastAcc = { ax: 0, ay: 0, az: 0 };
+
+        async function loop() {
+            let data = null;
+            const now = Date.now();
+            const timeLabel = new Date().toLocaleTimeString();
+
+            // FETCH DATA WITH FALLBACK FOR PREVIEW MODE
+            try {
+                const res = await fetch('/api/data');
+                data = await res.json();
+                
+                // If success, remove demo banner if exists
+                const demoBanner = document.getElementById('demo-mode-banner');
+                if(demoBanner) demoBanner.remove();
+
+            } catch (err) {
+                // GENERATE FAKE DATA FOR PREVIEW/DEMO MODE
+                if(!document.getElementById('demo-mode-banner')) {
+                    const banner = document.createElement('div');
+                    banner.id = 'demo-mode-banner';
+                    banner.innerText = "OFFLINE / DEMO MODE";
+                    banner.style.position = 'absolute'; banner.style.top = '0'; banner.style.left = '50%';
+                    banner.style.transform = 'translateX(-50%)'; banner.style.background = 'red';
+                    banner.style.color = 'white'; banner.style.padding = '5px 10px'; banner.style.zIndex = '1000';
+                    banner.style.fontSize = '12px'; banner.style.borderRadius = '0 0 5px 5px';
+                    document.body.appendChild(banner);
+                }
+                
+                const t = now / 1000;
+                data = {
+                    ax: Math.sin(t) * 0.1,
+                    ay: Math.cos(t) * 0.1,
+                    az: 1.0 + Math.sin(t*2) * 0.2, // Gravity + Oscillation
+                    pitch: Math.sin(t) * 10,
+                    roll: Math.cos(t) * 10,
+                    yaw: (t * 5) % 360,
+                    height: 100 + Math.sin(t/5) * 50,
+                    lat: 12.9716, long: 77.5946
+                };
+            }
+            
+            // Calculate Delta Time in Seconds
+            let dt = (now - lastTime) / 1000;
+            if (dt > 1.0) dt = 0.05; // Prevent jump on first load
+            lastTime = now;
+
+            // --- 1. CALIBRATION PHASE ---
+            if (!isCalibrated) {
+                if (calibrationCount < CALIBRATION_SAMPLES) {
+                    bias.ax += data.ax;
+                    bias.ay += data.ay;
+                    bias.az += data.az; // Summing up
+                    calibrationCount++;
+                    document.getElementById('imu-status').innerText = `CALIBRATING ${Math.round((calibrationCount/CALIBRATION_SAMPLES)*100)}%`;
+                    return; // Skip plotting until done
+                } else {
+                    // Average out the bias
+                    bias.ax /= CALIBRATION_SAMPLES;
+                    bias.ay /= CALIBRATION_SAMPLES;
+                    bias.az /= CALIBRATION_SAMPLES;
+                    
+                    // Note: We expect Az to be 1.0 (Gravity). The bias is the deviation from 1.0.
+                    // If rocket is upright, Az bias = measured - 1.0
+                    // If we want to remove gravity:
+                    bias.az -= 1.0; 
+                    
+                    isCalibrated = true;
+                    const pill = document.getElementById('imu-status');
+                    pill.innerText = "ACTIVE - INTEGRATING";
+                    pill.className = "status-pill active";
+                }
+            }
+
+            // --- 2. PHYSICS INTEGRATION (Trapezoidal Rule) ---
+            
+            // Remove Bias (Hardware Error)
+            let ax = data.ax - bias.ax;
+            let ay = data.ay - bias.ay;
+            let az = data.az - (bias.az + 1.0); // Remove Gravity (1G)
+            
+            // Deadband Filter (Noise Gate)
+            // If acceleration is tiny (just vibration), ignore it to stop drift
+            const NOISE_THRESHOLD = 0.05; 
+            if (Math.abs(ax) < NOISE_THRESHOLD) ax = 0;
+            if (Math.abs(ay) < NOISE_THRESHOLD) ay = 0;
+            if (Math.abs(az) < NOISE_THRESHOLD) az = 0;
+
+            // Integrate: V_new = V_old + (A_old + A_new) * 0.5 * dt
+            // Multiply by 9.81 to convert Gs to m/s^2
+            velocity.x += (lastAcc.ax + ax) * 0.5 * dt * 9.81;
+            velocity.y += (lastAcc.ay + ay) * 0.5 * dt * 9.81;
+            velocity.z += (lastAcc.az + az) * 0.5 * dt * 9.81;
+
+            // Store for next loop
+            lastAcc = { ax, ay, az };
+
+            // Drift Correction (Leaky Integrator)
+            // Slowly decay velocity to zero if no acceleration (prevents infinite runaway)
+            const DECAY = 0.99;
+            velocity.x *= DECAY;
+            velocity.y *= DECAY;
+            // velocity.z *= DECAY; // Don't decay Z strongly, rocket falls!
+
+            // --- 3. UPDATE CHARTS ---
+            
+            function updateC(chart, vals) {
+                chart.data.labels.push(timeLabel);
+                vals.forEach((v, i) => chart.data.datasets[i].data.push(v));
+                if(chart.data.labels.length > 100) {
+                    chart.data.labels.shift();
+                    chart.data.datasets.forEach(d => d.data.shift());
+                }
+                chart.update('none');
+            }
+
+            updateC(attChart, [data.pitch, data.roll, data.yaw]);
+            updateC(altChart, [data.height]);
+            updateC(accChart, [data.az, data.ay, data.ax]);
+            
+            // VELOCITY GRAPH
+            updateC(velChart, [velocity.z, velocity.y, velocity.x]);
+
+            Plotly.extendTraces('plotly3d', {
+                x: [[data.lat]], y: [[data.long]], z: [[data.height]]
+            }, [0], 1500);
+        }
+
+        // Run Loop
+        setInterval(loop, 100);
+
+        function resetPhysics() {
+            velocity = { x: 0, y: 0, z: 0 };
+            lastAcc = { ax: 0, ay: 0, az: 0 };
+            calibrationCount = 0;
+            bias = { ax: 0, ay: 0, az: 0 };
+            isCalibrated = false;
+            
+            // Clear Graphs
+            [attChart, altChart, velChart, accChart].forEach(c => {
+                c.data.labels = []; c.data.datasets.forEach(d => d.data = []); c.update();
+            });
+            document.getElementById('imu-status').innerText = "RE-CALIBRATING";
+            document.getElementById('imu-status').className = "status-pill calibrating";
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>VOYAGER X /// CONNECT</title>
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --deep-space: #0b1026; --accent: #4da6ff; }
+        body { 
+            background: radial-gradient(circle at center, #1b2744 0%, #000000 100%);
+            color: white; font-family: 'Rajdhani', sans-serif;
+            height: 100vh; display: flex; flex-direction: column; 
+            align-items: center; justify-content: center; margin: 0;
+        }
+        .title { font-size: 80px; letter-spacing: 15px; font-weight: 700; text-shadow: 0 0 30px var(--accent); margin-bottom: 60px; }
+        .btn-container { display: flex; gap: 40px; }
+        .btn {
+            width: 280px; height: 80px;
+            background: rgba(255,255,255,0.05);
+            border: 2px solid rgba(77, 166, 255, 0.3);
+            color: var(--accent);
+            font-size: 24px; font-weight: bold; letter-spacing: 2px;
+            cursor: pointer; transition: 0.3s;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 50px; /* ROUNDED EDGES */
+            backdrop-filter: blur(10px);
+        }
+        .btn:hover { 
+            background: var(--accent); color: #000; 
+            box-shadow: 0 0 50px rgba(77, 166, 255, 0.6); 
+            transform: scale(1.05);
+            border-color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="title">VOYAGER X</div>
+    <div class="btn-container">
+        <div class="btn" onclick="launch('simulation')">START SIMULATION</div>
+        <div class="btn" onclick="launch('live')">CONNECT LIVE</div>
+    </div>
+
+    <script>
+        function launch(mode) {
+            fetch('/api/start/' + mode);
+            setTimeout(() => {
+                window.open('/visualizer', 'VoyagerVis', 'width=1200,height=800');
+                window.open('/analytics', 'VoyagerData', 'width=1200,height=800');
+                window.close();
+            }, 500);
+        }
+    </script>
+</body>
+</html>
